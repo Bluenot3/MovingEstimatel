@@ -1,0 +1,532 @@
+<html><head><base href="https://forwardmovers.app/">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FORWARD MOVERS - Object Detection for Move Cost Estimation</title>
+<style>
+  :root {
+    --neon-orange: #FF6600;
+    --dark-gray: #222;
+    --light-gray: #444;
+  }
+  
+  body, html {
+    margin: 0;
+    padding: 0;
+    font-family: 'Roboto', sans-serif;
+    background-color: var(--dark-gray);
+    color: #fff;
+    height: 100%;
+    overflow: hidden;
+  }
+  
+  .app-container {
+    display: flex;
+    height: 100%;
+  }
+  
+  .main-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    position: relative;
+  }
+  
+  .logo {
+    font-size: 2.5rem;
+    font-weight: bold;
+    color: var(--neon-orange);
+    text-shadow: 0 0 10px var(--neon-orange);
+    margin-bottom: 20px;
+  }
+  
+  .camera-container {
+    position: relative;
+    width: 100%;
+    max-width: 500px;
+    aspect-ratio: 16/9;
+    overflow: hidden;
+    border-radius: 20px;
+    box-shadow: 0 0 20px rgba(255, 102, 0, 0.5);
+  }
+  
+  #camera-feed {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  
+  #detection-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+  }
+  
+  .controls {
+    display: flex;
+    justify-content: space-around;
+    flex-wrap: wrap;
+    width: 100%;
+    max-width: 500px;
+    margin-top: 20px;
+  }
+  
+  .btn {
+    background-color: var(--neon-orange);
+    color: #fff;
+    border: none;
+    padding: 12px 24px;
+    font-size: 1rem;
+    border-radius: 30px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    box-shadow: 0 0 10px rgba(255, 102, 0, 0.5);
+    margin: 5px;
+  }
+  
+  .btn:hover {
+    background-color: #FF8533;
+    box-shadow: 0 0 20px rgba(255, 102, 0, 0.8);
+  }
+  
+  .btn:disabled {
+    background-color: #888;
+    cursor: not-allowed;
+  }
+  
+  .sidebar {
+    width: 300px;
+    background-color: var(--light-gray);
+    padding: 20px;
+    overflow-y: auto;
+    box-shadow: -5px 0 15px rgba(0, 0, 0, 0.3);
+  }
+  
+  .inventory-item {
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    padding: 10px;
+    margin-bottom: 10px;
+  }
+  
+  .inventory-item h3 {
+    margin: 0 0 5px 0;
+    color: var(--neon-orange);
+  }
+  
+  .inventory-item p {
+    margin: 0;
+    font-size: 0.9rem;
+  }
+  
+  .inventory-item-controls {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 10px;
+  }
+  
+  .inventory-item-controls button {
+    background-color: var(--neon-orange);
+    color: #fff;
+    border: none;
+    padding: 5px 10px;
+    font-size: 0.8rem;
+    border-radius: 15px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+  }
+  
+  .inventory-item-controls button:hover {
+    background-color: #FF8533;
+  }
+  
+  .total-cost {
+    font-size: 1.2rem;
+    font-weight: bold;
+    margin-top: 20px;
+    text-align: center;
+    color: var(--neon-orange);
+  }
+  
+  .modal {
+    display: none;
+    position: fixed;
+    z-index: 1;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0,0,0,0.4);
+  }
+  
+  .modal-content {
+    background-color: var(--light-gray);
+    margin: 15% auto;
+    padding: 20px;
+    border: 1px solid #888;
+    width: 80%;
+    max-width: 500px;
+    border-radius: 10px;
+  }
+  
+  .close {
+    color: #aaa;
+    float: right;
+    font-size: 28px;
+    font-weight: bold;
+  }
+  
+  .close:hover,
+  .close:focus {
+    color: #fff;
+    text-decoration: none;
+    cursor: pointer;
+  }
+  
+  .edit-form label {
+    display: block;
+    margin-top: 10px;
+  }
+  
+  .edit-form input {
+    width: 100%;
+    padding: 5px;
+    margin-top: 5px;
+    border-radius: 5px;
+    border: 1px solid #ccc;
+  }
+  
+  .logo-image {
+    position: absolute;
+    left: 20px;
+    top: 20px;
+    width: 100px;
+    height: auto;
+    z-index: 1;
+  }
+  
+  @media (max-width: 768px) {
+    .app-container {
+      flex-direction: column;
+    }
+    
+    .sidebar {
+      width: 100%;
+      max-height: 30%;
+    }
+    
+    .logo-image {
+      width: 60px;
+      left: 10px;
+      top: 10px;
+    }
+  }
+</style>
+</head>
+<body>
+<div class="app-container">
+  <div class="main-content">
+    <img src="https://i.imgur.com/XMeNZU6.png" alt="Forward Movers Logo" class="logo-image">
+    <h1 class="logo">FORWARD MOVERS</h1>
+    <div class="camera-container">
+      <video id="camera-feed" autoplay playsinline></video>
+      <canvas id="detection-overlay"></canvas>
+    </div>
+    <div class="controls">
+      <button id="start-btn" class="btn">Start Scanning</button>
+      <button id="pause-btn" class="btn" disabled>Pause Scanning</button>
+      <button id="stop-btn" class="btn" disabled>Stop Scanning</button>
+      <button id="switch-camera-btn" class="btn">Switch Camera</button>
+      <button id="submit-estimate-btn" class="btn" disabled>Submit for Estimate</button>
+    </div>
+  </div>
+  <div class="sidebar">
+    <h2>Inventory</h2>
+    <div id="inventory-list"></div>
+    <div class="total-cost">Total Estimated Cost: $<span id="total-cost">0</span></div>
+  </div>
+</div>
+
+<div id="estimate-modal" class="modal">
+  <div class="modal-content">
+    <span class="close">&times;</span>
+    <h2>Estimate Details</h2>
+    <p>Your accurate estimate: $<span id="accurate-estimate"></span></p>
+    <p>Would you like to reserve this date and price for a $300 down payment?</p>
+    <button id="reserve-btn" class="btn">Reserve Now</button>
+  </div>
+</div>
+
+<div id="edit-modal" class="modal">
+  <div class="modal-content">
+    <span class="close">&times;</span>
+    <h2>Edit Item</h2>
+    <form id="edit-form" class="edit-form">
+      <label for="edit-item-name">Item Name:</label>
+      <input type="text" id="edit-item-name" required>
+      <label for="edit-item-count">Count:</label>
+      <input type="number" id="edit-item-count" min="1" required>
+      <label for="edit-item-weight">Weight (lbs):</label>
+      <input type="number" id="edit-item-weight" min="1" required>
+      <label for="edit-item-width">Width (cm):</label>
+      <input type="number" id="edit-item-width" min="1" required>
+      <label for="edit-item-height">Height (cm):</label>
+      <input type="number" id="edit-item-height" min="1" required>
+      <label for="edit-item-depth">Depth (cm):</label>
+      <input type="number" id="edit-item-depth" min="1" required>
+      <button type="submit" class="btn">Save Changes</button>
+    </form>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+<script>
+  let model;
+  let cameraFeed;
+  let detectionOverlay;
+  let isFrontCamera = false;
+  let isScanning = false;
+  const inventory = {};
+  let totalCost = 0;
+  let scannedObjects = new Set();
+
+  async function loadModel() {
+    model = await cocoSsd.load();
+  }
+
+  async function setupCamera() {
+    cameraFeed = document.getElementById('camera-feed');
+    detectionOverlay = document.getElementById('detection-overlay');
+    const constraints = {
+      video: { facingMode: isFrontCamera ? 'user' : 'environment' }
+    };
+    const stream = await navigator.mediaDevices.getUserMedia(constraints);
+    cameraFeed.srcObject = stream;
+    return new Promise((resolve) => {
+      cameraFeed.onloadedmetadata = () => {
+        resolve(cameraFeed);
+      };
+    });
+  }
+
+  function startScanning() {
+    if (!isScanning) {
+      isScanning = true;
+      detectObjects();
+      document.getElementById('start-btn').disabled = true;
+      document.getElementById('pause-btn').disabled = false;
+      document.getElementById('stop-btn').disabled = false;
+    }
+  }
+
+  function pauseScanning() {
+    isScanning = false;
+    document.getElementById('start-btn').disabled = false;
+    document.getElementById('pause-btn').disabled = true;
+  }
+
+  function stopScanning() {
+    isScanning = false;
+    document.getElementById('start-btn').disabled = false;
+    document.getElementById('pause-btn').disabled = true;
+    document.getElementById('stop-btn').disabled = true;
+    document.getElementById('submit-estimate-btn').disabled = false;
+  }
+
+  async function detectObjects() {
+    if (!isScanning) return;
+    
+    const predictions = await model.detect(cameraFeed);
+    
+    const ctx = detectionOverlay.getContext('2d');
+    ctx.clearRect(0, 0, detectionOverlay.width, detectionOverlay.height);
+    
+    predictions.forEach(prediction => {
+      if (prediction.score > 0.5 && !scannedObjects.has(prediction.class)) {
+        scannedObjects.add(prediction.class);
+        addToInventory(prediction.class);
+        
+        ctx.strokeStyle = '#FF6600';
+        ctx.lineWidth = 4;
+        ctx.strokeRect(
+          prediction.bbox[0], 
+          prediction.bbox[1], 
+          prediction.bbox[2], 
+          prediction.bbox[3]
+        );
+      }
+    });
+    
+    requestAnimationFrame(detectObjects);
+  }
+
+  function addToInventory(item) {
+    if (!inventory[item]) {
+      const weight = Math.round(Math.random() * 50 + 5);
+      const volume = {
+        width: Math.round(Math.random() * 100 + 20),
+        height: Math.round(Math.random() * 100 + 20),
+        depth: Math.round(Math.random() * 100 + 20)
+      };
+      const itemCost = Math.round((weight * 0.5 + (volume.width * volume.height * volume.depth) / 1000) * 10) / 10;
+      
+      inventory[item] = {
+        count: 1,
+        weight,
+        volume,
+        cost: itemCost
+      };
+      
+      updateInventoryDisplay();
+    } else {
+      inventory[item].count++;
+      updateInventoryDisplay();
+    }
+  }
+
+  function updateInventoryDisplay() {
+    const inventoryList = document.getElementById('inventory-list');
+    inventoryList.innerHTML = '';
+    let newTotalCost = 0;
+    
+    for (const [item, details] of Object.entries(inventory)) {
+      const itemElement = document.createElement('div');
+      itemElement.className = 'inventory-item';
+      itemElement.innerHTML = `
+        <h3>${item} (x${details.count})</h3>
+        <p>Weight: ${details.weight} lbs</p>
+        <p>Size: ${details.volume.width}W x ${details.volume.height}H x ${details.volume.depth}D cm</p>
+        <p>Est. Cost: $${(details.cost * details.count).toFixed(2)}</p>
+        <div class="inventory-item-controls">
+          <button onclick="editItem('${item}')">Edit</button>
+          <button onclick="removeItem('${item}')">Remove</button>
+        </div>
+      `;
+      inventoryList.appendChild(itemElement);
+      newTotalCost += details.cost * details.count;
+    }
+    
+    animateTotalCost(totalCost, newTotalCost);
+  }
+
+  function animateTotalCost(start, end) {
+    const duration = 2000;
+    const startTime = performance.now();
+    const totalCostElement = document.getElementById('total-cost');
+
+    function updateCost(currentTime) {
+      const elapsed = currentTime - startTime;
+      if (elapsed < duration) {
+        const progress = elapsed / duration;
+        const currentCost = start + (end - start) * progress;
+        totalCostElement.textContent = currentCost.toFixed(2);
+        requestAnimationFrame(updateCost);
+      } else {
+        totalCostElement.textContent = end.toFixed(2);
+        totalCost = end;
+      }
+    }
+
+    requestAnimationFrame(updateCost);
+  }
+
+  function switchCamera() {
+    isFrontCamera = !isFrontCamera;
+    setupCamera();
+  }
+
+  function submitEstimate() {
+    const accurateEstimate = totalCost * 1.1; // Add 10% for accuracy
+    document.getElementById('accurate-estimate').textContent = accurateEstimate.toFixed(2);
+    document.getElementById('estimate-modal').style.display = 'block';
+  }
+
+  function editItem(item) {
+    const details = inventory[item];
+    document.getElementById('edit-item-name').value = item;
+    document.getElementById('edit-item-count').value = details.count;
+    document.getElementById('edit-item-weight').value = details.weight;
+    document.getElementById('edit-item-width').value = details.volume.width;
+    document.getElementById('edit-item-height').value = details.volume.height;
+    document.getElementById('edit-item-depth').value = details.volume.depth;
+
+    const editModal = document.getElementById('edit-modal');
+    editModal.style.display = 'block';
+
+    document.getElementById('edit-form').onsubmit = function(e) {
+      e.preventDefault();
+      const newName = document.getElementById('edit-item-name').value;
+      const newCount = parseInt(document.getElementById('edit-item-count').value);
+      const newWeight = parseInt(document.getElementById('edit-item-weight').value);
+      const newWidth = parseInt(document.getElementById('edit-item-width').value);
+      const newHeight = parseInt(document.getElementById('edit-item-height').value);
+      const newDepth = parseInt(document.getElementById('edit-item-depth').value);
+
+      if (newName !== item) {
+        inventory[newName] = inventory[item];
+        delete inventory[item];
+        scannedObjects.delete(item);
+        scannedObjects.add(newName);
+      }
+
+      inventory[newName].count = newCount;
+      inventory[newName].weight = newWeight;
+      inventory[newName].volume = { width: newWidth, height: newHeight, depth: newDepth };
+      inventory[newName].cost = Math.round((newWeight * 0.5 + (newWidth * newHeight * newDepth) / 1000) * 10) / 10;
+
+      updateInventoryDisplay();
+      editModal.style.display = 'none';
+    };
+  }
+
+  function removeItem(item) {
+    delete inventory[item];
+    scannedObjects.delete(item);
+    updateInventoryDisplay();
+  }
+
+  document.addEventListener('DOMContentLoaded', async () => {
+    await loadModel();
+    await setupCamera();
+    
+    document.getElementById('start-btn').addEventListener('click', startScanning);
+    document.getElementById('pause-btn').addEventListener('click', pauseScanning);
+    document.getElementById('stop-btn').addEventListener('click', stopScanning);
+    document.getElementById('switch-camera-btn').addEventListener('click', switchCamera);
+    document.getElementById('submit-estimate-btn').addEventListener('click', submitEstimate);
+
+    const modals = document.getElementsByClassName('modal');
+    const closeBtns = document.getElementsByClassName('close');
+    const reserveBtn = document.getElementById('reserve-btn');
+
+    for (let i = 0; i < closeBtns.length; i++) {
+      closeBtns[i].onclick = function() {
+        modals[i].style.display = 'none';
+      }
+    }
+
+    reserveBtn.onclick = function() {
+      alert('Thank you for your reservation! A $300 down payment has been processed.');
+      document.getElementById('estimate-modal').style.display = 'none';
+    }
+
+    window.onclick = function(event) {
+      for (let i = 0; i < modals.length; i++) {
+        if (event.target == modals[i]) {
+          modals[i].style.display = 'none';
+        }
+      }
+    }
+  });
+</script>
+</body>
+</html>
